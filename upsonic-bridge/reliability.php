@@ -16,7 +16,7 @@ function upsonic_bridge_check_payload($request, $existing_id = 0) {
             $parts = explode("\n", (string) get_post_meta($existing_id, $key, true));
             $media = $parts[0] ?? '';
         }
-        if (!$status) $status = $post->post_status;
+        if (!$status) return true; // Validate only an explicit transition to publish.
     }
     if ($status !== 'publish') return true;
     if (!$title) return new WP_Error('upsonic_publish_title_required', 'Para publicar es obligatorio el título.', array('status'=>422));
@@ -69,7 +69,7 @@ function upsonic_bridge_audit($response, $handler, $request) {
     if (strpos($route, '/upsonic/v1/') !== 0 && strpos($route, '/boostsn/v1/') !== 0) return $response;
     $method = $request->get_method();
     if (!in_array($method, array('POST','PUT','PATCH','DELETE'), true) || preg_match('#/(ping|diagnostics|audit)$#', $route)) return $response;
-    if (is_wp_error($response)) $status = (int)($response->get_error_data()['status'] ?? 500);
+    if (is_wp_error($response)) { $error_data = $response->get_error_data(); $status = is_array($error_data) ? (int)($error_data['status'] ?? 500) : 500; }
     else $status = method_exists($response, 'get_status') ? (int)$response->get_status() : 200;
     $body = is_wp_error($response) ? array() : (method_exists($response, 'get_data') ? $response->get_data() : array());
     if (!is_array($body)) $body = array();
