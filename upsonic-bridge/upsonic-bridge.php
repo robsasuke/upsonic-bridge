@@ -2,16 +2,17 @@
 /**
  * Plugin Name: Upsonic Bridge
  * Description: Conector seguro de Upsonic con WordPress y PowerPress. Descubre podcasts y administra episodios, estados y papelera.
- * Version: 0.7.5
+ * Version: 0.8.0
  * Author: Robert Sasuke
  */
 
 if (!defined('ABSPATH')) exit;
 
 define('BOOSTSN_BRIDGE_OPTION', 'boostsn_bridge_token');
-define('BOOSTSN_BRIDGE_VERSION', '0.7.5');
+define('BOOSTSN_BRIDGE_VERSION', '0.8.0');
 // v0.7.5: maintenance release to verify unattended GitHub updates.
 require_once __DIR__ . '/updater.php';
+require_once __DIR__ . '/reliability.php';
 
 function boostsn_bridge_make_token() {
     $token = get_option(BOOSTSN_BRIDGE_OPTION);
@@ -385,6 +386,10 @@ function boostsn_bridge_assign_term($post_id, $post_type, $term_id) {
 }
 
 function boostsn_bridge_create_draft(WP_REST_Request $request) {
+    $validation = upsonic_bridge_check_payload($request);
+    if (is_wp_error($validation)) return $validation;
+    $duplicate = upsonic_bridge_find_duplicate($request);
+    if ($duplicate) return new WP_Error('upsonic_duplicate_episode', 'Ya existe un episodio con esta producción o URL de audio.', array('status'=>409,'post_id'=>$duplicate));
     $post_title = sanitize_text_field((string) $request->get_param('post_title'));
     $episode_title = sanitize_text_field((string) $request->get_param('episode_title'));
     $episode_number = sanitize_text_field((string) $request->get_param('episode_number'));
@@ -422,6 +427,8 @@ function boostsn_bridge_create_draft(WP_REST_Request $request) {
 
     $post_id = wp_insert_post(wp_slash($postarr), true);
     if (is_wp_error($post_id)) return $post_id;
+    $production_id = sanitize_text_field((string)$request->get_param('production_id'));
+    if ($production_id !== '') update_post_meta($post_id, '_upsonic_production_id', $production_id);
 
     $taxonomy = sanitize_key((string) $request->get_param('taxonomy'));
     $term_assignment = ($term_id && $taxonomy)
@@ -748,6 +755,8 @@ function upsonic_bridge_restore_episode(WP_REST_Request $request) {
 }
 
 function upsonic_bridge_update_episode(WP_REST_Request $request) {
+    $validation = upsonic_bridge_check_payload($request, absint($request['post_id']));
+    if (is_wp_error($validation)) return $validation;
     $post = get_post(absint($request['post_id']));
     $feed = sanitize_key((string) $request->get_param('feed_slug'));
     $post = upsonic_bridge_validate_episode($request['post_id'], $feed);
