@@ -1,0 +1,35 @@
+name: Publish plugin release
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'upsonic-bridge/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get plugin version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^ \* Version: *//p' upsonic-bridge/upsonic-bridge.php | head -1 | tr -d '\r')
+          test -n "$VERSION"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Package
+        run: zip -r "Upsonic-Bridge-v${{ steps.version.outputs.value }}.zip" upsonic-bridge
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.value }}"
+          FILE="Upsonic-Bridge-${TAG}.zip"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" --clobber
+          else
+            gh release create "$TAG" "$FILE" --title "Upsonic Bridge $TAG" --notes "Versión $TAG de Upsonic Bridge"
+          fi
