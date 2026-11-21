@@ -28,22 +28,34 @@ function upsonic_bridge_release_info() {
     return $info;
 }
 
+// Native update provider for plugins with an Update URI header (WordPress 5.8+).
+add_filter('update_plugins_github.com', function ($update, $plugin_data, $plugin_file) {
+    if ($plugin_file !== 'upsonic-bridge/upsonic-bridge.php') return $update;
+    $info = upsonic_bridge_release_info();
+    if (!$info) return false;
+    return array(
+        'slug' => 'upsonic-bridge',
+        'version' => $info['version'],
+        'url' => $info['url'],
+        'package' => $info['package'],
+        'autoupdate' => true,
+    );
+}, 10, 3);
+
+// Compatibility for installations that predate the Update URI header.
 add_filter('pre_set_site_transient_update_plugins', function ($transient) {
-    if (!is_object($transient) || empty($transient->checked)) return $transient;
-    $basename = plugin_basename(__FILE__);
-    // This file is included from the plugin root; its own basename is not the plugin's main file.
+    if (!is_object($transient) || !isset($transient->checked['upsonic-bridge/upsonic-bridge.php'])) return $transient;
     $basename = 'upsonic-bridge/upsonic-bridge.php';
     $info = upsonic_bridge_release_info();
     if (!$info) return $transient;
     if (version_compare($info['version'], BOOSTSN_BRIDGE_VERSION, '>')) {
         $transient->response[$basename] = (object) array(
+            'id' => 'https://github.com/robsasuke/upsonic-bridge',
             'slug' => 'upsonic-bridge', 'plugin' => $basename,
             'new_version' => $info['version'], 'url' => $info['url'],
-            'package' => $info['package'], 'icons' => array(),
+            'package' => $info['package'],
         );
         unset($transient->no_update[$basename]);
-    } else {
-        unset($transient->response[$basename]);
     }
     return $transient;
 });
