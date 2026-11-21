@@ -34,6 +34,7 @@ add_filter('update_plugins_github.com', function ($update, $plugin_data, $plugin
     $info = upsonic_bridge_release_info();
     if (!$info) return false;
     return array(
+        'id' => 'https://github.com/robsasuke/upsonic-bridge',
         'slug' => 'upsonic-bridge',
         'version' => $info['version'],
         'url' => $info['url'],
