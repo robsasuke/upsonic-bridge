@@ -1,4 +1,4 @@
-name: Publish plugin release
+name: Validate and publish plugin release
 on:
   push:
     branches: [main]
@@ -13,23 +13,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Get plugin version
+      - name: Validate PHP syntax
+        run: |
+          find upsonic-bridge -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Validate plugin metadata and files
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           VERSION=$(sed -n 's/^ \* Version: *//p' upsonic-bridge/upsonic-bridge.php | head -1 | tr -d '\r')
-          test -n "$VERSION"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          grep -Fq "define('BOOSTSN_BRIDGE_VERSION', '$VERSION')" upsonic-bridge/upsonic-bridge.php
+          grep -Fq 'Update URI: https://github.com/robsasuke/upsonic-bridge' upsonic-bridge/upsonic-bridge.php
+          for f in updater.php reliability.php update-admin.php uninstall.php; do test -s "upsonic-bridge/$f"; done
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Package
-        run: zip -r "Upsonic-Bridge-v${{ steps.version.outputs.value }}.zip" upsonic-bridge
-      - name: Publish
+      - name: Reject existing release tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ steps.version.outputs.value }}"
-          FILE="Upsonic-Bridge-${TAG}.zip"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$FILE" --clobber
-          else
-            gh release create "$TAG" "$FILE" --title "Upsonic Bridge $TAG" --notes "Versión $TAG de Upsonic Bridge"
+          if gh release view "$TAG" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists. Bump the plugin version before publishing."
+            exit 1
           fi
+      - name: Package and inspect archive
+        run: |
+          set -euo pipefail
+          FILE="Upsonic-Bridge-v${{ steps.version.outputs.value }}.zip"
+          zip -r "$FILE" upsonic-bridge
+          unzip -t "$FILE"
+          unzip -Z1 "$FILE" | grep -Fxq 'upsonic-bridge/upsonic-bridge.php'
+          unzip -Z1 "$FILE" | grep -Fxq 'upsonic-bridge/updater.php'
+          unzip -Z1 "$FILE" | grep -Fxq 'upsonic-bridge/update-admin.php'
+          sha256sum "$FILE" > "$FILE.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.value }}"
+          FILE="Upsonic-Bridge-$TAG.zip"
+          gh release create "$TAG" "$FILE" "$FILE.sha256" --target "$GITHUB_SHA" --title "Upsonic Bridge $TAG" --notes "Versión $TAG de Upsonic Bridge. Actualizaciones nativas, diagnóstico y verificaciones automáticas."
