@@ -2,15 +2,15 @@
 /**
  * Plugin Name: Upsonic Bridge
  * Description: Conector seguro de Upsonic con WordPress y PowerPress. Descubre podcasts y administra episodios, estados y papelera.
- * Version: 0.8.0
+ * Version: 0.8.1
+ * Update URI: https://github.com/robsasuke/upsonic-bridge
  * Author: Robert Sasuke
  */
 
 if (!defined('ABSPATH')) exit;
 
 define('BOOSTSN_BRIDGE_OPTION', 'boostsn_bridge_token');
-define('BOOSTSN_BRIDGE_VERSION', '0.8.0');
-// v0.7.5: maintenance release to verify unattended GitHub updates.
+define('BOOSTSN_BRIDGE_VERSION', '0.8.1');
 require_once __DIR__ . '/updater.php';
 require_once __DIR__ . '/reliability.php';
 
